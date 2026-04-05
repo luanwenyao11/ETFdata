@@ -16,27 +16,31 @@ def fetch_etf_data():
     # 2. 严格按照 params 字典结构组织参数
     # 根据签名，所有配置必须放在这个字典里
     extraction_params = {
-        "formats": ["extract"],
-        "extract": {
-            "prompt": "从网页表格中提取 ETF 份额数据。包括：业务日期、基金代码、基金简称、总份额（万份）。",
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "etf_data": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "date": {"type": "string"},
-                                "fund_code": {"type": "string"},
-                                "fund_name": {"type": "string"},
-                                "total_share_10k": {"type": "string"}
+            "formats": ["extract"],
+            "extract": {
+                # 强化 Prompt，告诉 AI 忽略导航栏，直奔数据表格
+                "prompt": "从页面的主要数据表格中提取 ETF 份额信息。表格包含‘基金代码’、‘基金扩位简称’和‘总份额(万份)’。请确保提取的是表格中的实时数据，而不是示例数据。",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "etf_data": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "date": {"type": "string", "description": "页面显示的业务日期"},
+                                    "fund_code": {"type": "string", "description": "6位数字的基金代码"},
+                                    "fund_name": {"type": "string", "description": "基金扩位简称"},
+                                    "total_share_10k": {"type": "string", "description": "总份额(万份)数值"}
+                                },
+                                "required": ["fund_code", "fund_name", "total_share_10k"]
                             }
                         }
                     }
                 }
-            }
-        }
+            },
+            # 强制等待表格元素出现 (根据 SSE 网站特征)
+            "waitFor": 5000 
     }
 
     print(f"Starting to scrape: {target_url}")
