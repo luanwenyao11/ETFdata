@@ -4,17 +4,15 @@ import sys
 from firecrawl import FirecrawlApp
 
 def fetch_etf_data():
-    # 1. 获取环境变量中的 API Key
     api_key = os.getenv("FIRECRAWL_API_KEY")
     if not api_key:
         print("Error: FIRECRAWL_API_KEY not found.")
         sys.exit(1)
 
     app = FirecrawlApp(api_key=api_key)
-
     target_url = "https://www.sse.com.cn/market/funddata/volumn/etfvolumn/"
 
-    # 2. 直接定义抽取模式
+    # 定义 Schema
     schema = {
         "type": "object",
         "properties": {
@@ -23,47 +21,56 @@ def fetch_etf_data():
                 "items": {
                     "type": "object",
                     "properties": {
-                        "date": {"type": "string", "description": "业务日期"},
-                        "fund_code": {"type": "string", "description": "基金代码"},
-                        "fund_name": {"type": "string", "description": "基金简称"},
-                        "total_share_10k": {"type": "string", "description": "总份额（万份）"}
+                        "date": {"type": "string"},
+                        "fund_code": {"type": "string"},
+                        "fund_name": {"type": "string"},
+                        "total_share_10k": {"type": "string"}
                     }
                 }
             }
         }
     }
 
-    print(f"Starting to scrape: {target_url}")
+    print(f"Starting to scrape with latest API structure: {target_url}")
 
     try:
-        # 3. 修正后的调用：直接传递参数，不再嵌套在 params 里
-        # 根据最新 SDK，formats 和 extract 现在是平级参数
-        response = app.scrape(
-            url=target_url,
-            formats=["extract"],
-            extract={
-                "schema": schema,
-                "prompt": "从网页表格中提取 ETF 份额数据列表。"
+        # 这种写法是目前最通用的：将 schema 放在 extraction_params 中
+        # 如果 scrape_url 报错，请尝试改为 app.scrape
+        response = app.scrape_url(
+            target_url, 
+            {
+                'formats': ['extract'],
+                'extract': {
+                    'schema': schema
+                }
             }
         )
 
-        # 4. 提取结果
-        # 注意：部分版本结果在 response['extract']，部分在 response['data']['extract']
-        # 这里做一个健壮性取值
-        extracted_content = response.get("extract") or response.get("data", {}).get("extract")
-
-        if extracted_content:
-            output_file = "etf_data.json"
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(extracted_content, f, indent=4, ensure_ascii=False)
-            print(f"Success! Extracted {len(extracted_content.get('etf_data', []))} records.")
+        # 检查返回结构 (Firecrawl 有时返回对象，有时返回字典)
+        data = None
+        if isinstance(response, dict):
+            data = response.get("extract") or response.get("data", {}).get("extract")
         else:
-            print("Response received but no extraction data found.")
-            print(f"Debug Response: {response}")
+            # 如果是对象属性
+            data = getattr(response, 'extract', None)
+
+        if data:
+            with open("etf_data.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+            print("Success! Data saved to etf_data.json")
+        else:
+            print(f"Extraction failed. Full response for debugging: {response}")
             sys.exit(1)
 
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        print(f"Final attempt failed: {str(e)}")
+        # 调试信息：打印出当前 SDK 支持的所有方法名，帮你快速定位
+        print("\n--- SDK Debug Info ---")
+        import inspect
+        if hasattr(app, 'scrape_url'):
+            print(f"scrape_url signature: {inspect.signature(app.scrape_url)}")
+        elif hasattr(app, 'scrape'):
+            print(f"scrape signature: {inspect.signature(app.scrape)}")
         sys.exit(1)
 
 if __name__ == "__main__":
