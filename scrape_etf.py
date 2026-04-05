@@ -38,7 +38,7 @@ def fetch_etf_data():
     try:
         # 3. 修正后的调用：直接传递参数，不再嵌套在 params 里
         # 根据最新 SDK，formats 和 extract 现在是平级参数
-        response = app.scrape_url(
+        response = app.scrape(
             url=target_url,
             formats=["extract"],
             extract={
