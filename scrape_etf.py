@@ -1,59 +1,61 @@
-import os
-import json
-import sys
-from firecrawl import FirecrawlApp
+name: Daily ETF Scrape
 
-def fetch_etf_data():
-    # 1. 获取环境变量
-    api_key = os.getenv("FIRECRAWL_API_KEY")
-    if not api_key:
-        print("错误: 未找到 API KEY")
-        sys.exit(1)
+# 触发条件
+on:
+  schedule:
+    # 每天北京时间上午 9:00 运行 (UTC 时间 1:00)
+    - cron: '0 1 * * *'
+  workflow_dispatch: # 允许在 GitHub Actions 页面手动点击运行
 
-    # 2. 初始化
-    app = FirecrawlApp(api_key=api_key)
-    target_url = "https://www.sse.com.cn/market/funddata/volumn/etfvolumn/"
-    
-    print(f"正在尝试稳定版抓取: {target_url}")
+# 核心权限设置：允许工作流向仓库写入文件
+permissions:
+  contents: write
 
-    # 3. 稳定版参数格式
-    params = {
-        "extractorOptions": {
-            "prompt": "提取表格中的 ETF 数据：基金代码、基金扩位简称、总份额(万份)。",
-            "extractionSchema": {
-                "type": "object",
-                "properties": {
-                    "etf_data": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "date": {"type": "string"},
-                                "fund_code": {"type": "string"},
-                                "fund_name": {"type": "string"},
-                                "total_share_10k": {"type": "string"}
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "waitFor": 5000
-    }
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-    try:
-        # 在 0.0.20 版本中，scrape_url 是最稳的方法
-        result = app.scrape_url(target_url, params=params)
+    steps:
+      # 1. 检出代码
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-        if result:
-            with open("etf_data.json", "w", encoding="utf-8") as f:
-                json.dump(result, f, indent=4, ensure_ascii=False)
-            print("--- 终于成功了！稳定版万岁！ ---")
-        else:
-            print("抓取完成但无数据。")
+      # 2. 设置 Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    except Exception as e:
-        print(f"运行失败: {str(e)}")
+      # 3. 安装依赖项
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install firecrawl-py; fi
 
-if __name__ == "__main__":
-    fetch_etf_data()
+      # 4. 运行爬虫脚本
+      - name: Run Scraper
+        env:
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+        run: python scrape_etf.py
+
+      # 5. 将生成的 JSON 文件提交并推送到仓库
+      - name: Commit and Push Data
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # 检查文件是否有变化，避免无意义的提交报错
+          if git diff --quiet etf_data.json; then
+            echo "No changes in ETF data, skipping commit."
+          else
+            git add etf_data.json
+            git commit -m "Update ETF data: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          fi
+
+      # 6. (可选) 将数据作为 Artifact 备份，方便手动下载
+      - name: Upload Data Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: etf-json-backup
+          path: etf_data.json
