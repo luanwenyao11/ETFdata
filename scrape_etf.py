@@ -45,7 +45,7 @@ def fetch_etf_data():
         # 4. 执行抓取
         # 使用 wait_for_selector 确保表格加载完成
         # 使用 formats=["extract"] 启用 AI 结构化提取
-        scrape_result = app.scrape_url(
+        scrape_result = app.scrape(
             url=target_url,
             params={
                 "formats": ["extract"],
