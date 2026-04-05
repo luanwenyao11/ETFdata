@@ -36,7 +36,7 @@ def fetch_etf_data():
     try:
         # 这种写法是目前最通用的：将 schema 放在 extraction_params 中
         # 如果 scrape_url 报错，请尝试改为 app.scrape
-        response = app.scrape_url(
+        response = app.scrape(
             target_url, 
             {
                 'formats': ['extract'],
